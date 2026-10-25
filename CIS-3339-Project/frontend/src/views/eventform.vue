@@ -62,7 +62,7 @@
               <span class="text-gray-700">Description</span>
               <textarea
                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-                rows="2"></textarea>
+                rows="2" v-model="event.description"></textarea>
             </label>
           </div>
         </div>
@@ -77,7 +77,7 @@
                   class="rounded-lg border border-gray-300 p-2 hover:bg-gray-100 transition-colors relative">
                   <label class="block w-full h-full">
                     <input type="checkbox" :id="service._id" :value="service._id"
-                      :checked="event.services.includes(service._id)" v-model="event.services"
+                      v-model="event.services"
                       class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-offset-0 focus:ring-indigo-200 focus:ring-opacity-50 mr-2">
                     <span class="font-medium">{{ service.name }}</span>
                   </label>
@@ -154,98 +154,74 @@
   </main>
 </template>
 
-<script>
-// import vuelidate validations
+<script setup>
+import { reactive, ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import useVuelidate from '@vuelidate/core'
 import { required } from '@vuelidate/validators'
-import { getServices, createEvent } from '../api/api'
 import { useToast } from 'vue-toastification'
+import { getServices, createEvent } from '../api/api'
 
-//Notifications
+const router = useRouter()
 const toast = useToast()
 
-export default {
-  data() {
-    return {
-      // event variable to hold new event information
-      event: {
-        name: null,
-        description: null,
-        date: null,
-        services: [],
-        address: {
-          line1: null,
-          line2: null,
-          city: null,
-          county: null,
-          zip: null
-        },
-        attendees: [],
-      },
-      //variable to assign service IDs to event (user clicks checkboxes to add services to event)
-      activeServices: [],
-      // variable that determines which services in the List of Services checkboxes have expanded details
-      openDescriptions: [],
-    }
+// new event data (bound to the form)
+const event = reactive({
+  name: null,
+  description: null,
+  date: null,
+  services: [],
+  address: {
+    line1: null,
+    line2: null,
+    city: null,
+    county: null,
+    zip: null
   },
-  setup() {
-    // Register Vuelidate
-    const v$ = useVuelidate();
-    return { v$ };
-  },
-  validations() {
-    // validations
-    const validDate = (value) => {
-      const date = new Date(value)
-      return !isNaN(date)
-    }
+  attendees: []
+})
 
-    // prevents form submission if new event has a date before the current date
-    const notBeforeToday = (value) => {
-      const today = new Date()
-      return value >= today.toISOString().split('T')[0]
-    }
+// active services the user can pick from
+const activeServices = ref([])
 
-    return {
-      event: {
-        name: { required },
-        date: {
-          required,
-          validDate,
-          notBeforeToday
-        },
-      }
-    }
-  },
-  async mounted() {
-    // when component is mounted, data is loaded
-    try {
-        const response = await getServices();
-        this.activeServices = response.filter(item => item.status === "Active")
-      } catch (error) {
-        toast.error(error)
-      }
-  },
-  methods: {
-    // method called when user tries to create new event
-    async handleSubmitForm() {
-      // Trigger validation
-      this.v$.$validate();
+// custom date checks
+const validDate = (value) => !isNaN(new Date(value))
+// new events cannot be in the past
+const notBeforeToday = (value) => value >= new Date().toISOString().split('T')[0]
 
-      if (this.v$.$error) {
-        toast.error('Please fix input field errors')
-        // Form is invalid, do not proceed
-        return;
-      }
+// validation rules
+const rules = {
+  event: {
+    name: { required },
+    date: { required, validDate, notBeforeToday }
+  }
+}
+// pass the form state to Vuelidate (needed in script setup)
+const v$ = useVuelidate(rules, { event })
 
-      try {
-        const response = await createEvent(this.event);
-        this.$router.push('/findevents')
-        toast.success(response)
-      } catch (error) {
-        toast.error('error creating new event:', error)
-      }
-    },
-  },
+// load services when page opens
+onMounted(async () => {
+  try {
+    const response = await getServices()
+    activeServices.value = response.filter((item) => item.status === 'Active')
+  } catch (err) {
+    toast.error(err?.message || 'Could not load services')
+  }
+})
+
+// create the event
+async function handleSubmitForm() {
+  const isValid = await v$.value.$validate()
+  if (!isValid) {
+    toast.error('Please fix input field errors')
+    return
+  }
+  try {
+    const response = await createEvent(event)
+    toast.success(response)
+    router.push('/findevents')
+  } catch (err) {
+    toast.error(err?.message || 'Could not create event')
+  }
 }
 </script>
