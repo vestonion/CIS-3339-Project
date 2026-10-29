@@ -1,28 +1,43 @@
+
 import { createApp, markRaw } from "vue";
 import router from "./router";
 import App from "./App.vue";
 import "./index.css";
 import Toast from "vue-toastification";
-// Import the CSS or use your own!
 import "vue-toastification/dist/index.css";
-//state management library
-import { createPinia } from 'pinia'
+import { createPinia } from 'pinia';
+import { useLoggedInUserStore } from './store/loggedInUser';
+import { setUnauthorizedHandler } from './api/api';
 
 const app = createApp(App);
 
-//create a pinia root store
+// Create a Pinia root store
 const pinia = createPinia();
-//pinia should be able to use router - has to be setup as plugin
+
+// Allow Pinia stores to use the router
 pinia.use(({ store }) => {
-  store.$router = markRaw(router)
+  store.$router = markRaw(router);
 });
 
-//add pinia object to our instance
-app.use(pinia)
+// Install Pinia first
+app.use(pinia);
+
+// Get the user store and restore the saved session
+const user = useLoggedInUserStore(pinia);
+user.restoreSession();
+
+// Clear the session and redirect to login after a 401 response
+setUnauthorizedHandler(() => {
+  user.clearSession();
+  router.replace({ name: 'login' });
+});
+
+// Install the router after restoring the session
 app.use(router);
 
 const options = {
   position: 'bottom-right'
 };
+
 app.use(Toast, options);
 app.mount("#app");
