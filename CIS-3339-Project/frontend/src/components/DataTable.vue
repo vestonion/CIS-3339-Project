@@ -5,7 +5,7 @@
         <tr>
           <th
             v-for="column in columns"
-            :key="column.key"
+            :key="getColumnKey(column)"
             scope="col"
             class="px-4 py-3 text-left text-sm font-semibold text-gray-700"
           >
@@ -29,16 +29,16 @@
         >
           <td
             v-for="column in columns"
-            :key="column.key"
+            :key="getColumnKey(column)"
             class="px-4 py-3 text-sm text-gray-700"
           >
             <slot
-              :name="`cell-${column.key}`"
+              :name="`cell-${getColumnKey(column)}`"
               :row="row"
-              :value="getCellValue(row, column.key)"
+              :value="getCellValue(row, getColumnKey(column))"
               :column="column"
             >
-              {{ getCellValue(row, column.key) }}
+              {{ getCellValue(row, getColumnKey(column)) }}
             </slot>
           </td>
         </tr>
@@ -83,6 +83,10 @@ const hoveredRow = ref(null)
 
 function getRowKey(row, index) {
   return row?.[props.rowKey] ?? index
+}
+
+function getColumnKey(column) {
+  return column.key ?? column.field
 }
 
 function getCellValue(row, key) {
