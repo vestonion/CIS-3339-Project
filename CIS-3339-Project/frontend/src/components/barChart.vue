@@ -4,61 +4,43 @@
   </div>
 </template>
 
-<script>
-import { Chart, registerables } from 'chart.js'
-import { Colors } from 'chart.js';
+<script setup>
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Chart, Colors, registerables } from 'chart.js'
 
-Chart.register(...registerables)
-Chart.register(Colors);
+Chart.register(...registerables, Colors)
 
-export default {
-  props: {
-    label: {
-      type: Array
+const props = defineProps({
+  label: { type: Array, default: () => [] },
+  chartData: { type: Array, default: () => [] }
+})
+
+// matches ref="attendanceChart" on the canvas
+const attendanceChart = ref(null)
+let chart
+
+function renderChart() {
+  if (!attendanceChart.value) return
+  // destroy the old chart before drawing a new one so canvas handlers don't pile up
+  chart?.destroy()
+  chart = new Chart(attendanceChart.value, {
+    type: 'bar',
+    data: {
+      labels: [...props.label],
+      datasets: [{ borderWidth: 1, data: [...props.chartData] }]
     },
-    chartData: {
-      type: Array
+    options: {
+      scales: { y: { ticks: { stepSize: 1 } }, x: { grid: { display: false } } },
+      plugins: { legend: { display: false }, title: { display: true, text: 'Attendance Chart' } },
+      responsive: true,
+      maintainAspectRatio: true
     }
-  },
-  async mounted() {
-    await new Chart(this.$refs.attendanceChart, {
-      type: 'bar',
-      data: {
-        labels: this.label,
-        datasets: [
-          {
-            borderWidth: 1,
-            data: this.chartData
-          }
-        ]
-      },
-      options: {
-        scales: {
-          y: {
-            ticks: {
-              stepSize: 1
-            }
-          },
-          x: {
-            gridLines: {
-              display: false
-            }
-          }
-        },
-        plugins: {
-          legend: {
-            display: false
-          },
-          title: {
-            display: true,
-            text: 'Attendance Chart'
-          }
-        },
-        responsive: true,
-        maintainAspectRatio: true
-      }
-    })
-  }
+  })
 }
-</script>
 
+onMounted(renderChart)
+// redraw if the dashboard passes in new data while the page is open
+watch(() => [props.label, props.chartData], renderChart, { deep: true })
+// clean up the chart when leaving the page to prevent memory leaks
+onBeforeUnmount(() => chart?.destroy())
+</script>

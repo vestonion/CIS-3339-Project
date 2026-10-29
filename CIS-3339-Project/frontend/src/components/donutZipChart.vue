@@ -4,45 +4,43 @@
   </div>
 </template>
 
-<script>
+<script setup>
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
+
 Chart.register(...registerables)
+
 //define props (label and chartData)
-export default {
-  props: {
-    label: {
-      type: Array
+const props = defineProps({
+  label: { type: Array, default: () => [] },
+  chartData: { type: Array, default: () => [] }
+})
+
+// matches ref="zipChart" on the canvas
+const zipChart = ref(null)
+let chart
+
+function renderChart() {
+  if (!zipChart.value) return
+  // destroy the old chart before drawing a new one so canvas handlers don't pile up
+  chart?.destroy()
+  chart = new Chart(zipChart.value, {
+    type: 'doughnut',
+    data: {
+      labels: [...props.label],
+      datasets: [{ borderWidth: 1, data: [...props.chartData] }]
     },
-    chartData: {
-      type: Array
+    options: {
+      plugins: { legend: { display: false }, title: { display: true, text: 'Clients by Zip Code' } },
+      responsive: true,
+      maintainAspectRatio: true
     }
-  },
-  async mounted() { //uses the data to load the chart's values
-    await new Chart(this.$refs.zipChart, {
-      type: 'doughnut',
-      data: {
-        labels: this.label,
-        datasets: [
-          {
-            borderWidth: 1,
-            data: this.chartData // Update this line
-          }
-        ]
-      },
-      options: {
-        plugins: {
-          legend: {
-            display: false
-          },
-          title: {
-            display: true,
-            text: 'Clients by Zip Code'
-          }
-        },
-        responsive: true,
-        maintainAspectRatio: true
-      }
-    })
-  },
+  })
 }
+
+onMounted(renderChart)
+// redraw if the dashboard passes in new data while the page is open
+watch(() => [props.label, props.chartData], renderChart, { deep: true })
+// clean up the chart when leaving the page to prevent memory leaks
+onBeforeUnmount(() => chart?.destroy())
 </script>
