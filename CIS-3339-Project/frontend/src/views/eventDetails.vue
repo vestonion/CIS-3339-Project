@@ -66,7 +66,7 @@
                 class="rounded-lg border border-gray-300 p-2 hover:bg-gray-100 transition-colors relative">
                 <label class="block w-full h-full">
                   <input type="checkbox" :id="service._id" :value="service._id"
-                    v-model="event.services"
+                    :checked="event.services.includes(service._id)" v-model="event.services"
                     :disabled="service.status === 'Inactive'"
                     class="rounded border-gray-300 disabled:opacity-50 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-offset-0 focus:ring-indigo-200 focus:ring-opacity-50 mr-2">
                   <span class="font-medium">{{ service.name }}</span>
@@ -136,20 +136,20 @@
         <!--Update Event button-->
         <div class="flex justify-between mt-10 mr-20">
           <button @click="submitEventUpdate" type="submit" class="bg-green-700 disabled:opacity-50 text-white rounded"
-            :disabled="!isEditor">
+            :disabled="user.role === 'viewer'">
             Update Event
           </button>
         </div>
         <!--Delete Event button-->
         <div class="flex justify-between mt-10 mr-20">
           <button @click="submitDeleteEvent" type="submit" class="bg-red-700  disabled:opacity-50 text-white rounded"
-            :disabled="!isEditor">
+            :disabled="user.role === 'viewer'">
             Delete Event
           </button>
           <!--Go back button-->
         </div>
         <div class="flex justify-between mt-10 mr-20">
-          <button type="reset" class="border border-red-700 bg-white text-red-700 rounded" @click="router.back()">
+          <button type="reset" class="border border-red-700 bg-white text-red-700 rounded" @click="$router.back()">
             Go back
           </button>
         </div>
@@ -174,19 +174,16 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-300">
-              <tr v-if="!clients.length">
-                <td colspan="3" class="p-4 text-center text-gray-600">No attendees yet</td>
-              </tr>
-              <tr @click="openClient(client._id)"
+              <tr @click="$router.push({name: 'clientdetails', params: { id: client._id } })" 
               v-for="client in clients" :key="client._id" class="cursor-pointer"
                 :class="{ 'hoverRow': hoverId === client._id }" @mouseenter="hoverId = client._id"
                 @mouseleave="hoverId = null">
                 <td class="p-2 text-left">
                   {{ client.firstName + ' ' + client.lastName }}
                 </td>
-                <td class="p-2 text-left">{{ client.address?.city }}</td>
+                <td class="p-2 text-left">{{ client.address.city }}</td>
                 <td class="p-2 text-left">
-                  {{ client.phoneNumber?.primary }}
+                  {{ client.phoneNumber.primary }}
                 </td>
               </tr>
             </tbody>
@@ -198,107 +195,71 @@
 </template>
 
 <script setup>
-import { reactive, ref, computed, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import useVuelidate from '@vuelidate/core'
 import { required } from '@vuelidate/validators'
-import { useToast } from 'vue-toastification'
 import { useLoggedInUserStore } from '../store/loggedInUser'
 import { getEventById, getEventAttendees, getServices, updateEvent, deleteEvent } from '../api/api'
+import { useToast } from 'vue-toastification'
 
 const route = useRoute()
 const router = useRouter()
-const toast = useToast()
 const user = useLoggedInUserStore()
-
-// only editors can update or delete (allowlist, not denylist)
-const isEditor = computed(() => user.role === 'editor')
-
-// clients registered for this event
+const toast = useToast()
+const eventId = route.params.id
 const clients = ref([])
-// all services for the org (for the checkboxes)
 const services = ref([])
-// row the mouse is over
 const hoverId = ref(null)
-
-// event data (bound to the form)
-const event = reactive({
-  name: null,
-  description: null,
-  date: null,
-  address: {
-    line1: null,
-    line2: null,
-    city: null,
-    county: null,
-    zip: null
-  },
-  attendees: [],
-  services: []
+const event = reactive({ name:null, description:null, date:null,
+  address:{ line1:null, line2:null, city:null, county:null, zip:null },
+  attendees:[], services:[]
 })
-
-// validation rules
-const validDate = (value) => !isNaN(new Date(value))
-const rules = {
-  event: {
-    name: { required },
-    date: { required, validDate }
-  }
-}
+const rules = computed(() => ({ event:{
+  name:{required},
+  date:{required, validDate:value => !Number.isNaN(new Date(value).getTime())}
+} }))
 const v$ = useVuelidate(rules, { event })
 
-// load event, attendees and services when page opens
 onMounted(async () => {
-  const id = route.params.id
   try {
-    const [eventResponse, clientsResponse, servicesResponse] = await Promise.all([
-      getEventById(id),
-      getEventAttendees(id),
-      getServices()
+    const [eventResult, clientResults, serviceResults] = await Promise.all([
+      getEventById(eventId), getEventAttendees(eventId), getServices()
     ])
-    eventResponse.date = new Date(eventResponse.date).toISOString().substring(0, 10)
-    // copy the loaded data into the reactive form object
-    const emptyAddress = { ...event.address }
-    Object.assign(event, eventResponse)
-    event.address = { ...emptyAddress, ...(eventResponse.address || {}) }
-    event.services = eventResponse.services || []
-    event.attendees = eventResponse.attendees || []
-    clients.value = clientsResponse || []
-    services.value = servicesResponse || []
-  } catch (err) {
-    toast.error(err?.message || 'Could not load event')
-  }
+    Object.assign(event, eventResult)
+    event.date = new Date(eventResult.date).toISOString().slice(0, 10)
+    clients.value = clientResults
+    services.value = serviceResults
+  } catch (error) { toast.error(error.message) }
 })
 
-// save changes
 async function submitEventUpdate() {
-  const isValid = await v$.value.$validate()
-  if (!isValid) return
+  if (!(await v$.value.$validate())) return
   try {
-    const response = await updateEvent(route.params.id, event)
-    toast.success(response)
+    const result = await updateEvent(eventId, event)
+    toast.success(result.message || result)
     router.push('/findevents')
-  } catch (err) {
-    toast.error(err?.message || 'Could not update event')
-  }
+  } catch (error) { toast.error(error.message) }
 }
 
-// delete event (only allowed when nobody is registered)
 async function submitDeleteEvent() {
-  if (event.attendees.length > 0) {
-    toast.info('Event can not be deleted since it has attendees.')
-    return
-  }
   try {
-    const response = await deleteEvent(route.params.id)
-    toast.success(response)
+    if (event.attendees?.length) {
+      toast.info('Event can not be deleted since it has attendees.')
+      return
+    }
+    const result = await deleteEvent(eventId)
+    toast.success(result.message || result)
     router.push('/findevents')
-  } catch (err) {
-    toast.error(err?.message || 'Could not delete event')
-  }
+  } catch (error) { toast.error(error.message) }
 }
 
-function openClient(id) {
-  router.push({ name: 'clientdetails', params: { id } })
+function formatDate(date) {
+  if (!date) return ''
+  const value = new Date(date)
+  if (Number.isNaN(value.getTime())) return ''
+  const month = String(value.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(value.getUTCDate()).padStart(2, '0')
+  return `${month}/${day}/${value.getUTCFullYear()}`
 }
 </script>
