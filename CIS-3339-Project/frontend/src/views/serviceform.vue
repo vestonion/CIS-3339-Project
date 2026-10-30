@@ -119,7 +119,7 @@ async function handleSubmitForm() {
         toast.success(response)
         router.push('/findservice')
     } catch (error) {
-        toast.error('Error creating new service:', error)
+        toast.error(error.message)
     }
 }
 </script>
