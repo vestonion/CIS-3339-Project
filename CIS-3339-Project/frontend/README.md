@@ -19,7 +19,7 @@ npm install
 
 The frontend needs a running backend API to load or save project data.
 
-Create a local file named `.env.local` in the `frontend` folder:
+Create a file named `.env` in the `frontend` folder (it is committed for grading):
 
 ```env
 VITE_ROOT_API=http://localhost:3000
@@ -28,6 +28,8 @@ VITE_ROOT_API=http://localhost:3000
 Set `VITE_ROOT_API` to the backend API base URL you will use. The example above is for a backend running locally on port 3000.
 
 Do not put passwords, database connection strings, or other private credentials in frontend environment variables. Vite exposes variables beginning with `VITE_` to the browser.
+
+If a `frontend/.env.local` file exists, Vite uses its value over `.env`. Keep both on the same URL.
 
 Restart the Vite server after changing an environment file.
 
@@ -59,13 +61,15 @@ Preview the production build locally:
 npm run serve
 ```
 
-Open the preview URL printed in the terminal. To check client-side routing, open a nested route directly and refresh the page. The host must serve `index.html` for frontend routes that do not match a physical file.
+`npm run serve` runs the preview at `http://localhost:5173`, which matches the backend `CORS_ORIGIN`. Stop `npm run dev` first, because both use port 5173. `VITE_ROOT_API` is read at build time, so run `npm run build` again after changing it.
+
+To check client-side routing, open a nested route directly and refresh the page. The host must serve `index.html` for frontend routes that do not match a physical file.
 
 ## Deployment
 
-The deployment host has not been selected yet. After the team selects and tests a host, document the exact host-specific deployment steps here.
+The team runs the production build locally with `npm run build` and `npm run serve`. Vite preview already sends `index.html` for nested routes.
 
-The deployment must:
+To deploy to a host, the deployment must:
 
 1. Serve the contents of `frontend/dist`.
 2. Rewrite frontend routes that do not match a physical file to `index.html` so Vue Router can load them.
